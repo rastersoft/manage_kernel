@@ -19,6 +19,7 @@ class element:
 
         self.childs = []
         self.selections = []
+        self.depends = []
 
 
     def get_parent(self):
@@ -106,6 +107,13 @@ class element:
 
         self.selections.append(element)
 
+    def add_depend(self,line):
+
+        line2 = line.strip()
+        if (len(line2) == 0):
+            return
+
+        self.depends.append(line2)
 
     def add_attribute(self,attr):
 
@@ -144,7 +152,9 @@ class element:
             self.add_selection(attribute[6:])
             return
 
-        #if (attribute.startswith("depends on")):
+        if (attribute.startswith("depends on")):
+            self.add_depend(attribute[10:])
+            return
 
 
 
@@ -163,6 +173,8 @@ class element:
                 if (l[1]!= None):
                     print("("+l[1]+")", end = "")
                 print("")
+            for l in self.depends:
+                print((pos+1)*"  "+"+"+l)
         for e in self.childs:
             if (self.etype == "if"):
                 e.print_data(pos)
