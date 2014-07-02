@@ -4,60 +4,179 @@ import sys
 import os
 
 class element:
-    
-    def __init__(self,name,parent,etype):
-        
-        self.name = name
+
+    def __init__(self,parent,etype):
+
+        self.etype = etype
         self.parent = parent
-        self.description = None
-        self.dependencies = []
+        self.symbol = None
+        self.prompt = None
+        self.help = False
+        self.condition = None
+
+        if (self.parent != None):
+            self.parent.add_child(self)
+
         self.childs = []
         self.selections = []
-        self.etype = etype
-    
-    def add_dependency(self,dep):
-        
-        self.dependencies.append(dep)
-    
-    def add_selection(self,selection):
 
-        self.selections.append(selection)
-    
-    def add_child(self,child):
-        
-        self.childs.append(child)
-        
-    def set_description(self,description):
-        
-        self.description = description
-    
+
     def get_parent(self):
-        
         return self.parent
-    
-    def set_name(self,name):
 
-        self.name = name
-    
+
+    def set_symbol(self,symbol):
+        self.symbol = symbol.strip()
+
+
+    def set_prompt(self,prompt):
+        self.prompt = prompt.replace('"','').strip()
+
+
+    def set_condition(self,condition):
+
+        if (condition == None):
+            return
+
+        c = condition.strip()
+
+        if (c.startswith("if ") or (c.startswith("if\t"))):
+            c = c[2:].strip()
+            self.condition = c
+
+
+    def add_child(self,child):
+
+        self.childs.append(child)
+
+
+    def get_prompt(self,line):
+
+        pos1 = line.find(" ")
+
+        if (pos1 == -1):
+            return
+
+        line2 = line[pos1:].strip()
+        if (len(line2) == 0):
+            return
+
+        if (line2[0] == '"'):
+            pos = 0
+            while(True):
+                pos = line2.find('"',pos+1)
+                if (pos == -1):
+                    return
+                # don't take into account '\"'
+                if (line2[pos-1] != '\\'):
+                    break
+
+            line3 = line2[pos+1:]
+            line2 = line2[1:pos]
+        else:
+            pos = line2.find(' ')
+            if (pos == -1):
+                line3 = None
+            else:
+                line3 = line2[pos+1:]
+                line2 = line2[0:pos]
+
+        self.prompt = line2
+        self.set_condition(line3)
+
+    def add_selection(self,line):
+
+        pos1 = line.find(" ")
+
+        if (pos1 == -1):
+            return
+
+        line2 = line[pos1:].strip()
+        if (len(line2) == 0):
+            return
+
+        pos = line2.find(' ')
+        if (pos == -1):
+            element = [line2, None]
+        else:
+            c = line2[pos+1:].strip()
+            if (c.startswith("if ")):
+                c = c[2:].strip()
+            element = [line2[0:pos], c]
+
+        self.selections.append(element)
+
+
+    def add_attribute(self,attr):
+
+        if (self.help):
+            return
+
+        attribute = attr.strip()
+        if (attribute == "help") or (attribute == "---help---"):
+            self.help = True
+
+        if (attribute.startswith("prompt")):
+            self.get_prompt(attribute[6:])
+            return
+
+        if (attribute.startswith("bool")):
+            self.get_prompt(attribute[4:])
+            return
+
+        if (attribute.startswith("tristate")):
+            self.get_prompt(attribute[8:])
+            return
+
+        if (attribute.startswith("string")):
+            self.get_prompt(attribute[6:])
+            return
+
+        if (attribute.startswith("hex")):
+            self.get_prompt(attribute[3:])
+            return
+
+        if (attribute.startswith("int")):
+            self.get_prompt(attribute[3:])
+            return
+
+        if (attribute.startswith("select")):
+            self.add_selection(attribute[6:])
+            return
+
+        #if (attribute.startswith("depends on")):
+
+
+
     def print_data(self,pos):
-        
-        if (self.description != None):
-            print(pos*"  ", end="")
-            print(self.description, end="")
-            if (self.name != None):
-                print (" ("+str(self.name)+")",end ="")
+
+        if (self.prompt != None):
+            print(pos*"  ", end = "")
+            print(self.prompt, end = "")
+            if (self.symbol != None):
+                print (" ["+str(self.symbol)+"]",end = "")
+            if (self.condition != None):
+                print (" ("+str(self.condition)+")",end = "")
             print()
+            for l in self.selections:
+                print((pos+1)*"  "+"*"+l[0], end = "")
+                if (l[1]!= None):
+                    print("("+l[1]+")", end = "")
+                print("")
         for e in self.childs:
-            e.print_data(pos+1)
-        
+            if (self.etype == "if"):
+                e.print_data(pos)
+            else:
+                e.print_data(pos+1)
+
 
 
 class process_kfile:
-    
+
     def __init__(self,basepath,filename,arch,parent=None):
 
         self.parent = parent
-        
+
         try:
             kfile = open(os.path.join(basepath,filename),"r")
         except:
@@ -65,113 +184,130 @@ class process_kfile:
             return
         current_item = None
         append_line = ""
-        help_mode = False
+
         for line_i in kfile:
-            line = line_i.rstrip().replace("$SRCARCH",arch)
+
+            line = line_i.rstrip().replace("$SRCARCH",arch).replace("\t"," ")
+
+            line = append_line + line
+
             if (len(line.strip())<1):
                 continue
-            line = append_line + line
+
             if (line[-1] == '\\'):
-                append_line = line
+                append_line = line[:-1]
                 continue
-            append_line = ""
-            if ((line[0] != ' ') and (line[0] != '\t')):
-                help_mode = False
-            if (help_mode):
-                continue
-            line = line.strip()
-            if (line[0]=='#'):
-                continue
-
-            pos = line.find(" ")
-            pos2 = line.find("\t")
-            if (pos != -1) and (pos2 != -1):
-                if (pos2 < pos):
-                    pos = pos2
-                pos2 = -1
-            if (pos == -1):
-                pos = pos2
-            if (pos != -1):
-                data = line[:pos]
-                if (data == "depends"):
-                    pos+=3
-                    data = "depends on"
-                params = line[pos+1:].replace('"','')
             else:
-                params = ""
-                data = line
+                append_line = ""
 
-            if ((data == 'option') or (data == 'default')):
+            if (line.strip()[0]=='#'):
                 continue
 
-            if ((data == "help") or (data == "---help---")):
-                help_mode = True
-                continue
-
-            if (data == "source"):
-                process_kfile(basepath,params,arch,self.parent)
-                continue
-
-            if (data == "config"):
-                current_item = element(params,self.parent,"config")
-                if (self.parent != None):
-                    self.parent.add_child(current_item)
-                continue
-
-            if (data == "menuconfig"):
-                current_item = element(params,self.parent,"menuconfig")
-                if (self.parent != None):
-                    self.parent.add_child(current_item)
-                self.parent = current_item
-                continue
-
-
-            if (data == "choice"):
-                current_item = element (params,self.parent,"choice")
-                if (self.parent != None):
-                    self.parent.add_child(current_item)
-                self.parent = current_item
-                continue
-
-            if (data == "comment"):
-                current_item = element(None,self.parent,"comment")
-                current_item.set_description(params)
-                if (self.parent != None):
-                    self.parent.add_child(current_item)
-                continue
-
-            if (data == "menu") or (data == "mainmenu"):
-                current_item = element (None,self.parent,"menu")
-                current_item.set_description(params)
-                if (self.parent != None):
-                    self.parent.add_child(current_item)
-                self.parent = current_item
-                continue
-
-            if (data == 'prompt'):
-                current_item.set_description(params)
-                continue
-            
-            if (data == 'bool') or (data == 'boolean') or (data == 'tristate') or (data == 'string') or (data == 'hex') or (data == 'int'):
-                if (params != "") and (current_item != None):
-                    current_item.set_description(params)
-                continue
-            
-            if (data=='depends on'):
+            if ((line[0] == ' ') or self.check_attribute(line)):
                 if (current_item != None):
-                    current_item.add_dependency(params)
-                continue
-            
-            if (data=='select'):
-                if (current_item!=None):
-                    current_item.add_selection(params)
+                    while (line.find("  ") != -1):
+                        line = line.replace("  "," ")
+                    current_item.add_attribute(line)
                 continue
 
-            if (data == 'endmenu') or (data == 'endchoice') :
+            if (line.startswith("config")):
+                current_item = element(self.parent,"config")
+                current_item.set_symbol(line[6:])
+                continue
+
+            if (line.startswith("menuconfig")):
+                current_item = element(self.parent,"menuconfig")
+                current_item.set_symbol(line[10:])
+                self.parent = current_item
+                continue
+
+            if (line.startswith("choice")):
+                current_item = element(self.parent,"choice")
+                current_item.set_symbol(line[6:])
+                self.parent = current_item
+                continue
+
+            if (line.startswith("endchoice")):
                 self.parent = self.parent.get_parent()
                 continue;
 
-            #print("Unknown element: "+str(data))
+            if (line.startswith("comment")):
+                current_item = element(self.parent,"comment")
+                current_item.set_prompt(line[7:])
+                continue
+
+            if (line.startswith("menu")):
+                current_item = element(self.parent,"menu")
+                current_item.set_prompt(line[4:])
+                self.parent = current_item
+                continue
+
+            if (line.startswith("endmenu")):
+                self.parent = self.parent.get_parent()
+                continue;
+
+            if (line.startswith("mainmenu")):
+                current_item = element(self.parent,"mainmenu")
+                current_item.set_prompt(line[8:])
+                self.parent = current_item
+                continue
+
+            if (line.startswith("source")):
+                process_kfile(basepath,line[6:].replace('"','').strip(),arch,self.parent)
+                continue
+
+            if (line.startswith("if")):
+                current_item = element(self.parent,"if")
+                current_item.set_symbol(line[2:])
+                self.parent = current_item
+                continue
+
+            if (line.startswith("endif")):
+                self.parent = self.parent.get_parent()
+                continue;
+
+            print("Unknown element: "+str(line))
+
+    def check_attribute(self,line):
+
+        if (line.startswith("option")):
+            return True
+
+        if (line.startswith("default")):
+            return True
+
+        if (line.startswith("help")):
+            return True
+
+        if (line.startswith("---help---")):
+            return True
+
+        if (line.startswith("prompt")):
+            return True
+
+        if (line.startswith("bool")):
+            return True
+
+        if (line.startswith("boolean")):
+            return True
+
+        if (line.startswith("tristate")):
+            return True
+
+        if (line.startswith("string")):
+            return True
+
+        if (line.startswith("hex")):
+            return True
+
+        if (line.startswith("int")):
+            return True
+
+        if (line.startswith("depends on")):
+            return True
+
+        if (line.startswith("select")):
+            return True
 
 
 arch = sys.argv[1]
