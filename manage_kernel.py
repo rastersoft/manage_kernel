@@ -3,7 +3,7 @@
 import sys
 import os
 
-class element:
+class kfile_element:
 
     def __init__(self,parent,etype):
 
@@ -182,7 +182,6 @@ class element:
                 e.print_data(pos+1)
 
 
-
 class process_kfile:
 
     def __init__(self,basepath,filename,arch,parent=None):
@@ -223,18 +222,18 @@ class process_kfile:
                 continue
 
             if (line.startswith("config")):
-                current_item = element(self.parent,"config")
+                current_item = kfile_element(self.parent,"config")
                 current_item.set_symbol(line[6:])
                 continue
 
             if (line.startswith("menuconfig")):
-                current_item = element(self.parent,"menuconfig")
+                current_item = kfile_element(self.parent,"menuconfig")
                 current_item.set_symbol(line[10:])
                 self.parent = current_item
                 continue
 
             if (line.startswith("choice")):
-                current_item = element(self.parent,"choice")
+                current_item = kfile_element(self.parent,"choice")
                 current_item.set_symbol(line[6:])
                 self.parent = current_item
                 continue
@@ -244,12 +243,12 @@ class process_kfile:
                 continue;
 
             if (line.startswith("comment")):
-                current_item = element(self.parent,"comment")
+                current_item = kfile_element(self.parent,"comment")
                 current_item.set_prompt(line[7:])
                 continue
 
             if (line.startswith("menu")):
-                current_item = element(self.parent,"menu")
+                current_item = kfile_element(self.parent,"menu")
                 current_item.set_prompt(line[4:])
                 self.parent = current_item
                 continue
@@ -259,7 +258,7 @@ class process_kfile:
                 continue;
 
             if (line.startswith("mainmenu")):
-                current_item = element(self.parent,"mainmenu")
+                current_item = kfile_element(self.parent,"mainmenu")
                 current_item.set_prompt(line[8:])
                 self.parent = current_item
                 continue
@@ -269,7 +268,7 @@ class process_kfile:
                 continue
 
             if (line.startswith("if")):
-                current_item = element(self.parent,"if")
+                current_item = kfile_element(self.parent,"if")
                 current_item.set_symbol(line[2:])
                 self.parent = current_item
                 continue
@@ -322,8 +321,88 @@ class process_kfile:
             return True
 
 
+
+class kbuild_element:
+    
+    def __init__(self, parent, condition):
+
+        self.parent = parent
+        self.condition = condition
+        self.childs = []
+        self.files = []
+
+
+    def add_child(self,child):
+        self.childs.append(child)
+
+
+    def add_file(self,path,filename):
+        fullpath = os.path.join(path,filename)
+        self.files.append(fullpath)
+
+    
+
+class kbuild:
+    
+    def __init__(self,path,arch,parent = None,dictionary = None):
+
+        if (parent == None):
+            first_time = True
+            self.current_parent = kbuild_element(None,None)
+        else:
+            first_time = False
+            self.current_parent = parent
+
+        if (dictionary == None):
+            self.dictionary = []
+        else:
+            self.dictionary = dictionary
+
+        if (first_time):
+            self.find_childs(path,arch)
+        else:
+            self.process_file(path, arch)
+
+
+    def find_childs(self,path,arch):
+        
+        elements = os.listdir(path)
+        for l in elements:
+            fullpath = os.path.join(path,l)
+            if (os.path.isdir(fullpath)):
+                kbuild(fullpath,arch,self.current_parent,self.dictionary)
+
+
+    def process_file(self,path,arch):
+
+        try:
+            kfile = open(os.path.join(path,"Kbuild"),"r")
+        except:
+            pass
+        
+        try:
+            kfile = open(os.path.join(path,"Makefile"),"r")
+        except:
+            return
+        
+        for line in kfile:
+            line = line.strip().replace("$SRCARCH",arch).replace("\t"," ")
+            if (line.startswith("obj-y")):
+                self.process_elements(self.current_parent,line[5:])
+                continue
+            if (line.startswith("obj-$")):
+                child = kbuild_element(self.current_parent,line.split(")")[0][6:])
+                self.process_elements(child,line.split(")")[1])
+
+
+    def process_elements(self,parent,line):
+        
+        print(line.strip())
+
 arch = sys.argv[1]
 
-p = process_kfile(sys.argv[2],"Kconfig",arch,None)
+#p = process_kfile(sys.argv[2],"Kconfig",arch,None)
 
-p.parent.print_data(0)
+#p.parent.print_data(0)
+
+q = kbuild(sys.argv[2],arch)
