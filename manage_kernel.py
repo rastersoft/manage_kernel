@@ -323,7 +323,7 @@ class process_kfile:
 
 
 class kbuild_element:
-    
+
     def __init__(self, parent, condition):
 
         self.parent = parent
@@ -340,10 +340,20 @@ class kbuild_element:
         fullpath = os.path.join(path,filename)
         self.files.append(fullpath)
 
-    
+    def print_data(self,pos):
+
+        for e in self.files:
+            print(pos*"  ", end = "")
+            if (self.condition != None):
+                print("("+self.condition+") ",end = "")
+            print (e)
+
+        for e in self.childs:
+            e.print_data(pos+1)
+
 
 class kbuild:
-    
+
     def __init__(self,path,arch,parent = None,dictionary = None):
 
         if (parent == None):
@@ -358,46 +368,92 @@ class kbuild:
         else:
             self.dictionary = dictionary
 
+        self.arch = arch
+        self.path = path
+
         if (first_time):
-            self.find_childs(path,arch)
+            self.find_childs()
         else:
-            self.process_file(path, arch)
+            self.process_file()
 
 
-    def find_childs(self,path,arch):
-        
-        elements = os.listdir(path)
+    def find_childs(self):
+
+        elements = os.listdir(self.path)
         for l in elements:
-            fullpath = os.path.join(path,l)
+            fullpath = os.path.join(self.path,l)
             if (os.path.isdir(fullpath)):
                 kbuild(fullpath,arch,self.current_parent,self.dictionary)
 
 
-    def process_file(self,path,arch):
+    def process_file(self):
 
         try:
-            kfile = open(os.path.join(path,"Kbuild"),"r")
+            kfile = open(os.path.join(self.path,"Kbuild"),"r")
         except:
             pass
-        
+
         try:
-            kfile = open(os.path.join(path,"Makefile"),"r")
+            kfile = open(os.path.join(self.path,"Makefile"),"r")
         except:
             return
-        
+
+        append_line = ""
         for line in kfile:
-            line = line.strip().replace("$SRCARCH",arch).replace("\t"," ")
+
+            line = line.rstrip().replace("$SRCARCH",arch).replace("\t"," ")
+
+            line = append_line + line
+
+            if (len(line.strip())<1):
+                continue
+
+            if (line[-1] == '\\'):
+                append_line = line[:-1]
+                continue
+            else:
+                append_line = ""
+
             if (line.startswith("obj-y")):
                 self.process_elements(self.current_parent,line[5:])
                 continue
             if (line.startswith("obj-$")):
-                child = kbuild_element(self.current_parent,line.split(")")[0][6:])
-                self.process_elements(child,line.split(")")[1])
+                pos = line.find(")")
+                child = kbuild_element(self.current_parent,line[6:pos])
+                self.current_parent.add_child(child)
+                self.process_elements(child,line[pos+1:])
 
 
     def process_elements(self,parent,line):
-        
-        print(line.strip())
+
+        while (line.find("  ") != -1):
+            line = line.replace("  "," ")
+        line = line.replace("+=","").replace(":=","").replace("=","")
+        newl = ""
+        parenteses = 0
+        for l in line:
+            if l == "$":
+                continue
+            if l == '(':
+                parenteses+=1
+                continue
+            if (l == ')') and (parenteses > 0):
+                parenteses-=1
+                continue
+            if (parenteses == 0):
+                newl+=l
+        line = newl
+
+        pos = line.find("#")
+        if (pos != -1):
+            line = line[0:pos]
+        elements = line.strip().split(" ")
+        for l in elements:
+            if l.endswith("/"): # process a folder
+                kbuild(os.path.join(self.path,l),self.arch,parent,self.dictionary)
+            else:
+                parent.add_file(self.path,l)
+
 
 arch = sys.argv[1]
 
@@ -406,3 +462,4 @@ arch = sys.argv[1]
 #p.parent.print_data(0)
 
 q = kbuild(sys.argv[2],arch)
+q.current_parent.print_data(0)
