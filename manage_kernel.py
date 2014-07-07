@@ -7,6 +7,7 @@ class kfile_element:
 
     def __init__(self,parent,etype):
 
+        self.marked = False
         self.etype = etype
         self.parent = parent
         self.symbol = None
@@ -157,6 +158,21 @@ class kfile_element:
             return
 
 
+    def print_tree(self,pos):
+
+        if (self.marked == False):
+            return
+
+        if (self.prompt != None):
+            print(pos*"  ", end = "")
+            print(self.prompt)
+
+        for e in self.childs:
+            if (self.etype == "if"):
+                e.print_tree(pos)
+            else:
+                e.print_tree(pos+1)
+
 
     def print_data(self,pos):
 
@@ -175,11 +191,42 @@ class kfile_element:
                 print("")
             for l in self.depends:
                 print((pos+1)*"  "+"+"+l)
+
         for e in self.childs:
             if (self.etype == "if"):
                 e.print_data(pos)
             else:
                 e.print_data(pos+1)
+
+
+    def mark_to_print(self):
+
+        self.marked = True
+        if (self.parent != None):
+            self.parent.mark_to_print()
+
+
+    def find_definition(self, definition):
+
+        if (definition.startswith("CONFIG_")):
+            definition = definition[7:]
+
+        if (self.prompt != None):
+            if (self.symbol == definition):
+                self.mark_to_print()
+                return self.prompt
+
+            for l in self.selections:
+                if (l == definition):
+                    self.mark_to_print()
+                    return self.prompt
+
+        for e in self.childs:
+            retval = e.find_definition(definition)
+            if (retval != None):
+                return retval
+
+        return None
 
 
 class process_kfile:
@@ -329,20 +376,19 @@ class kbuild_element:
         self.parent = parent
         self.condition = condition
         self.childs = []
-        self.files = []
+        self.calls = []
 
 
     def add_child(self,child):
         self.childs.append(child)
 
 
-    def add_file(self,path,filename):
-        fullpath = os.path.join(path,filename)
-        self.files.append(fullpath)
+    def add_call(self,callname):
+        self.calls.append(callname)
 
     def print_data(self,pos):
 
-        for e in self.files:
+        for e in self.calls:
             print(pos*"  ", end = "")
             if (self.condition != None):
                 print("("+self.condition+") ",end = "")
@@ -351,6 +397,23 @@ class kbuild_element:
         for e in self.childs:
             e.print_data(pos+1)
 
+    def find_symbol(self,symbol):
+
+        for e in self.calls:
+            if (e == symbol):
+                return [ self.condition ]
+
+        for e in self.childs:
+            retval = e.find_symbol(symbol)
+            if (retval == None):
+                continue
+            if (len(retval) != 0):
+                if (self.condition != None):
+                    return retval.insert(0,self.condition)
+                else:
+                    return retval
+
+        return []
 
 class kbuild:
 
@@ -448,18 +511,89 @@ class kbuild:
         if (pos != -1):
             line = line[0:pos]
         elements = line.strip().split(" ")
-        for l in elements:
-            if l.endswith("/"): # process a folder
-                kbuild(os.path.join(self.path,l),self.arch,parent,self.dictionary)
-            else:
-                parent.add_file(self.path,l)
 
+        for l in elements:
+            full_path = os.path.join(self.path,l)
+            if l.endswith("/"): # process a folder
+                kbuild(full_path,self.arch,parent,self.dictionary)
+                continue
+
+            if (full_path.endswith(".o")):
+                full_path = full_path[:-1]+"c"
+            else:
+                continue
+            try:
+                cfile = open(full_path,"r",encoding='latin1')
+            except:
+                continue
+
+
+            for line in cfile:
+                line = line.strip()
+
+                if (line.startswith("#if")):
+                    pos = line.find(" ")
+                    if (pos != -1):
+                        child = kbuild_element(parent,line[pos+1:])
+                        parent.add_child(child)
+                        parent = child
+                        continue
+
+                if (line.startswith("#endif")):
+                    if (parent.parent != None):
+                        parent = parent.parent
+
+                pos = line.find("EXPORT_SYMBOL")
+                if (-1 == pos):
+                    continue
+                pos2 = line.find("(",pos)
+                if (pos2 == -1):
+                    continue
+                pos3 = line.find(")",pos2)
+                if (pos3 == -1):
+                    data = line[pos2+1:]
+                else:
+                    data = line[pos2+1:pos3]
+                parent.add_call(data)
 
 arch = sys.argv[1]
 
-#p = process_kfile(sys.argv[2],"Kconfig",arch,None)
+p = process_kfile(sys.argv[2],"Kconfig",arch,None)
 
 #p.parent.print_data(0)
 
 q = kbuild(sys.argv[2],arch)
-q.current_parent.print_data(0)
+#q.current_parent.print_data(0)
+
+symbols = []
+
+syscalls = open(sys.argv[3],"r",encoding='latin1')
+for line in syscalls:
+    elements = line.split(" ")
+    if (len(elements) != 3):
+        continue
+    call = elements[2].strip()
+    if (call.startswith("__ksymtab_") == False):
+        continue
+    symbol = call[10:]
+    if (symbols.count(symbol) == 0):
+        symbols.append(symbol)
+
+definitions = []
+for symbol in symbols:
+    definition = q.current_parent.find_symbol(symbol)
+    if (len(definition) != 0):
+        if (len(definition)==1) and (definition[0] == None):
+            continue
+        for d in definition:
+            if (definitions.count(d)==0):
+                definitions.append(d)
+
+for l in definitions:
+    l = l.replace("defined","").strip()
+    retval = p.parent.find_definition(l)
+    if (retval == None):
+        print("definition not found: "+l)
+
+print()
+p.parent.print_tree(0)
