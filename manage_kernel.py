@@ -21,9 +21,10 @@
 import sys
 import os
 
+
 class kfile_element:
 
-    def __init__(self,parent,etype):
+    def __init__(self, parent, etype):
 
         self.marked = False
         self.etype = etype
@@ -33,29 +34,25 @@ class kfile_element:
         self.help = False
         self.condition = None
 
-        if (self.parent != None):
+        if (self.parent is not None):
             self.parent.add_child(self)
 
         self.childs = []
         self.selections = []
         self.depends = []
 
-
     def get_parent(self):
         return self.parent
 
-
-    def set_symbol(self,symbol):
+    def set_symbol(self, symbol):
         self.symbol = symbol.strip()
 
+    def set_prompt(self, prompt):
+        self.prompt = prompt.replace('"', '').strip()
 
-    def set_prompt(self,prompt):
-        self.prompt = prompt.replace('"','').strip()
+    def set_condition(self, condition):
 
-
-    def set_condition(self,condition):
-
-        if (condition == None):
+        if (condition is None):
             return
 
         c = condition.strip()
@@ -64,13 +61,11 @@ class kfile_element:
             c = c[2:].strip()
             self.condition = c
 
-
-    def add_child(self,child):
+    def add_child(self, child):
 
         self.childs.append(child)
 
-
-    def get_prompt(self,line):
+    def get_prompt(self, line):
 
         pos1 = line.find(" ")
 
@@ -84,27 +79,27 @@ class kfile_element:
         if (line2[0] == '"'):
             pos = 0
             while(True):
-                pos = line2.find('"',pos+1)
+                pos = line2.find('"', pos + 1)
                 if (pos == -1):
                     return
                 # don't take into account '\"'
-                if (line2[pos-1] != '\\'):
+                if (line2[pos - 1] != '\\'):
                     break
 
-            line3 = line2[pos+1:]
+            line3 = line2[pos + 1:]
             line2 = line2[1:pos]
         else:
             pos = line2.find(' ')
             if (pos == -1):
                 line3 = None
             else:
-                line3 = line2[pos+1:]
+                line3 = line2[pos + 1:]
                 line2 = line2[0:pos]
 
         self.prompt = line2
         self.set_condition(line3)
 
-    def add_selection(self,line):
+    def add_selection(self, line):
 
         pos1 = line.find(" ")
 
@@ -119,14 +114,14 @@ class kfile_element:
         if (pos == -1):
             element = [line2, None]
         else:
-            c = line2[pos+1:].strip()
+            c = line2[pos + 1:].strip()
             if (c.startswith("if ")):
                 c = c[2:].strip()
             element = [line2[0:pos], c]
 
         self.selections.append(element)
 
-    def add_depend(self,line):
+    def add_depend(self, line):
 
         line2 = line.strip()
         if (len(line2) == 0):
@@ -134,7 +129,7 @@ class kfile_element:
 
         self.depends.append(line2)
 
-    def add_attribute(self,attr):
+    def add_attribute(self, attr):
 
         if (self.help):
             return
@@ -175,61 +170,57 @@ class kfile_element:
             self.add_depend(attribute[10:])
             return
 
+    def print_tree(self, pos):
 
-    def print_tree(self,pos):
-
-        if (self.marked == False):
+        if not self.marked:
             return
 
-        if (self.prompt != None):
-            print(pos*"  ", end = "")
+        if (self.prompt is not None):
+            print(pos * "  ", end="")
             print(self.prompt)
 
         for e in self.childs:
             if (self.etype == "if"):
                 e.print_tree(pos)
             else:
-                e.print_tree(pos+1)
+                e.print_tree(pos + 1)
 
+    def print_data(self, pos):
 
-    def print_data(self,pos):
-
-        if (self.prompt != None):
-            print(pos*"  ", end = "")
-            print(self.prompt, end = "")
-            if (self.symbol != None):
-                print (" ["+str(self.symbol)+"]",end = "")
-            if (self.condition != None):
-                print (" ("+str(self.condition)+")",end = "")
+        if (self.prompt is not None):
+            print(pos * "  ", end="")
+            print(self.prompt, end="")
+            if (self.symbol is not None):
+                print (" [" + str(self.symbol) + "]", end="")
+            if (self.condition is not None):
+                print (" (" + str(self.condition) + ")", end="")
             print()
             for l in self.selections:
-                print((pos+1)*"  "+"*"+l[0], end = "")
-                if (l[1]!= None):
-                    print("("+l[1]+")", end = "")
+                print((pos + 1) * "  " + "*" + l[0], end="")
+                if (l[1] is not None):
+                    print("(" + l[1] + ")", end="")
                 print("")
             for l in self.depends:
-                print((pos+1)*"  "+"+"+l)
+                print((pos + 1) * "  " + "+" + l)
 
         for e in self.childs:
             if (self.etype == "if"):
                 e.print_data(pos)
             else:
-                e.print_data(pos+1)
-
+                e.print_data(pos + 1)
 
     def mark_to_print(self):
 
         self.marked = True
-        if (self.parent != None):
+        if (self.parent is not None):
             self.parent.mark_to_print()
-
 
     def find_definition(self, definition):
 
         if (definition.startswith("CONFIG_")):
             definition = definition[7:]
 
-        if (self.prompt != None):
+        if (self.prompt is not None):
             if (self.symbol == definition):
                 self.mark_to_print()
                 return self.prompt
@@ -241,7 +232,7 @@ class kfile_element:
 
         for e in self.childs:
             retval = e.find_definition(definition)
-            if (retval != None):
+            if (retval is not None):
                 return retval
 
         return None
@@ -249,25 +240,25 @@ class kfile_element:
 
 class process_kfile:
 
-    def __init__(self,basepath,filename,arch,parent=None):
+    def __init__(self, basepath, filename, arch, parent=None):
 
         self.parent = parent
 
         try:
-            kfile = open(os.path.join(basepath,filename),"r")
+            kfile = open(os.path.join(basepath, filename), "r")
         except:
-            print("Error al abrir "+str(basepath)+" "+str(filename))
+            print("Error al abrir " + str(basepath) + " " + str(filename))
             return
         current_item = None
         append_line = ""
 
         for line_i in kfile:
 
-            line = line_i.rstrip().replace("$SRCARCH",arch).replace("\t"," ")
+            line = line_i.rstrip().replace("$SRCARCH", arch).replace("\t", " ")
 
             line = append_line + line
 
-            if (len(line.strip())<1):
+            if (len(line.strip()) < 1):
                 continue
 
             if (line[-1] == '\\'):
@@ -276,75 +267,76 @@ class process_kfile:
             else:
                 append_line = ""
 
-            if (line.strip()[0]=='#'):
+            if (line.strip()[0] == '#'):
                 continue
 
             if ((line[0] == ' ') or self.check_attribute(line)):
-                if (current_item != None):
+                if (current_item is not None):
                     while (line.find("  ") != -1):
-                        line = line.replace("  "," ")
+                        line = line.replace("  ", " ")
                     current_item.add_attribute(line)
                 continue
 
             if (line.startswith("config")):
-                current_item = kfile_element(self.parent,"config")
+                current_item = kfile_element(self.parent, "config")
                 current_item.set_symbol(line[6:])
                 continue
 
             if (line.startswith("menuconfig")):
-                current_item = kfile_element(self.parent,"menuconfig")
+                current_item = kfile_element(self.parent, "menuconfig")
                 current_item.set_symbol(line[10:])
                 self.parent = current_item
                 continue
 
             if (line.startswith("choice")):
-                current_item = kfile_element(self.parent,"choice")
+                current_item = kfile_element(self.parent, "choice")
                 current_item.set_symbol(line[6:])
                 self.parent = current_item
                 continue
 
             if (line.startswith("endchoice")):
                 self.parent = self.parent.get_parent()
-                continue;
+                continue
 
             if (line.startswith("comment")):
-                current_item = kfile_element(self.parent,"comment")
+                current_item = kfile_element(self.parent, "comment")
                 current_item.set_prompt(line[7:])
                 continue
 
             if (line.startswith("menu")):
-                current_item = kfile_element(self.parent,"menu")
+                current_item = kfile_element(self.parent, "menu")
                 current_item.set_prompt(line[4:])
                 self.parent = current_item
                 continue
 
             if (line.startswith("endmenu")):
                 self.parent = self.parent.get_parent()
-                continue;
+                continue
 
             if (line.startswith("mainmenu")):
-                current_item = kfile_element(self.parent,"mainmenu")
+                current_item = kfile_element(self.parent, "mainmenu")
                 current_item.set_prompt(line[8:])
                 self.parent = current_item
                 continue
 
             if (line.startswith("source")):
-                process_kfile(basepath,line[6:].replace('"','').strip(),arch,self.parent)
+                process_kfile(basepath, line[6:].replace(
+                    '"', '').strip(), arch, self.parent)
                 continue
 
             if (line.startswith("if")):
-                current_item = kfile_element(self.parent,"if")
+                current_item = kfile_element(self.parent, "if")
                 current_item.set_symbol(line[2:])
                 self.parent = current_item
                 continue
 
             if (line.startswith("endif")):
                 self.parent = self.parent.get_parent()
-                continue;
+                continue
 
-            print("Unknown element: "+str(line))
+            print("Unknown element: " + str(line))
 
-    def check_attribute(self,line):
+    def check_attribute(self, line):
 
         if (line.startswith("option")):
             return True
@@ -386,7 +378,6 @@ class process_kfile:
             return True
 
 
-
 class kbuild_element:
 
     def __init__(self, parent, condition):
@@ -396,55 +387,54 @@ class kbuild_element:
         self.childs = []
         self.calls = []
 
-
-    def add_child(self,child):
+    def add_child(self, child):
         self.childs.append(child)
 
-
-    def add_call(self,callname):
+    def add_call(self, callname):
         self.calls.append(callname)
 
-    def print_data(self,pos):
+    def print_data(self, pos):
 
         for e in self.calls:
-            print(pos*"  ", end = "")
-            if (self.condition != None):
-                print("("+self.condition+") ",end = "")
+            print(pos * "  ", end="")
+            if (self.condition is not None):
+                print("(" + self.condition + ") ", end="")
             print (e)
 
         for e in self.childs:
-            e.print_data(pos+1)
+            e.print_data(pos + 1)
 
-    def find_symbol(self,symbol):
+    def find_symbol(self, symbol):
 
         for e in self.calls:
             if (e == symbol):
-                return [ self.condition ]
+                return [self.condition]
 
         for e in self.childs:
             retval = e.find_symbol(symbol)
-            if (retval == None):
+            if (retval is None):
                 continue
             if (len(retval) != 0):
-                if (self.condition != None):
-                    return retval.insert(0,self.condition)
+                if (self.condition is not None):
+                    return retval.insert(0, self.condition)
                 else:
                     return retval
 
         return []
 
+
 class kbuild:
 
-    def __init__(self,path,arch,parent = None,dictionary = None):
+    def __init__(self, path, arch, parent=None, dictionary=None):
 
-        if (parent == None):
+        if (parent is None):
             first_time = True
-            self.current_parent = kbuild_element(None,None)
+            self.current_parent = kbuild_element(None, None)
         else:
             first_time = False
             self.current_parent = parent
 
-        if (dictionary == None):
+        if (dictionary is None):
             self.dictionary = []
         else:
             self.dictionary = dictionary
@@ -457,36 +447,34 @@ class kbuild:
         else:
             self.process_file()
 
-
     def find_childs(self):
 
         elements = os.listdir(self.path)
         for l in elements:
-            fullpath = os.path.join(self.path,l)
+            fullpath = os.path.join(self.path, l)
             if (os.path.isdir(fullpath)):
-                kbuild(fullpath,arch,self.current_parent,self.dictionary)
-
+                kbuild(fullpath, arch, self.current_parent, self.dictionary)
 
     def process_file(self):
 
         try:
-            kfile = open(os.path.join(self.path,"Kbuild"),"r")
+            kfile = open(os.path.join(self.path, "Kbuild"), "r")
         except:
             pass
 
         try:
-            kfile = open(os.path.join(self.path,"Makefile"),"r")
+            kfile = open(os.path.join(self.path, "Makefile"), "r")
         except:
             return
 
         append_line = ""
         for line in kfile:
 
-            line = line.rstrip().replace("$SRCARCH",arch).replace("\t"," ")
+            line = line.rstrip().replace("$SRCARCH", arch).replace("\t", " ")
 
             line = append_line + line
 
-            if (len(line.strip())<1):
+            if (len(line.strip()) < 1):
                 continue
 
             if (line[-1] == '\\'):
@@ -496,33 +484,32 @@ class kbuild:
                 append_line = ""
 
             if (line.startswith("obj-y")):
-                self.process_elements(self.current_parent,line[5:])
+                self.process_elements(self.current_parent, line[5:])
                 continue
             if (line.startswith("obj-$")):
                 pos = line.find(")")
-                child = kbuild_element(self.current_parent,line[6:pos])
+                child = kbuild_element(self.current_parent, line[6:pos])
                 self.current_parent.add_child(child)
-                self.process_elements(child,line[pos+1:])
+                self.process_elements(child, line[pos + 1:])
 
-
-    def process_elements(self,parent,line):
+    def process_elements(self, parent, line):
 
         while (line.find("  ") != -1):
-            line = line.replace("  "," ")
-        line = line.replace("+=","").replace(":=","").replace("=","")
+            line = line.replace("  ", " ")
+        line = line.replace("+=", "").replace(":=", "").replace("=", "")
         newl = ""
         parenteses = 0
         for l in line:
             if l == "$":
                 continue
             if l == '(':
-                parenteses+=1
+                parenteses += 1
                 continue
             if (l == ')') and (parenteses > 0):
-                parenteses-=1
+                parenteses -= 1
                 continue
             if (parenteses == 0):
-                newl+=l
+                newl += l
         line = newl
 
         pos = line.find("#")
@@ -531,20 +518,19 @@ class kbuild:
         elements = line.strip().split(" ")
 
         for l in elements:
-            full_path = os.path.join(self.path,l)
-            if l.endswith("/"): # process a folder
-                kbuild(full_path,self.arch,parent,self.dictionary)
+            full_path = os.path.join(self.path, l)
+            if l.endswith("/"):  # process a folder
+                kbuild(full_path, self.arch, parent, self.dictionary)
                 continue
 
             if (full_path.endswith(".o")):
-                full_path = full_path[:-1]+"c"
+                full_path = full_path[:-1] + "c"
             else:
                 continue
             try:
-                cfile = open(full_path,"r",encoding='latin1')
+                cfile = open(full_path, "r", encoding='latin1')
             except:
                 continue
-
 
             for line in cfile:
                 line = line.strip()
@@ -552,46 +538,46 @@ class kbuild:
                 if (line.startswith("#if")):
                     pos = line.find(" ")
                     if (pos != -1):
-                        child = kbuild_element(parent,line[pos+1:])
+                        child = kbuild_element(parent, line[pos + 1:])
                         parent.add_child(child)
                         parent = child
                         continue
 
                 if (line.startswith("#endif")):
-                    if (parent.parent != None):
+                    if (parent.parent is not None):
                         parent = parent.parent
 
                 pos = line.find("EXPORT_SYMBOL")
                 if (-1 == pos):
                     continue
-                pos2 = line.find("(",pos)
+                pos2 = line.find("(", pos)
                 if (pos2 == -1):
                     continue
-                pos3 = line.find(")",pos2)
+                pos3 = line.find(")", pos2)
                 if (pos3 == -1):
-                    data = line[pos2+1:]
+                    data = line[pos2 + 1:]
                 else:
-                    data = line[pos2+1:pos3]
+                    data = line[pos2 + 1:pos3]
                 parent.add_call(data)
 
 arch = sys.argv[1]
 
-p = process_kfile(sys.argv[2],"Kconfig",arch,None)
+p = process_kfile(sys.argv[2], "Kconfig", arch, None)
 
-#p.parent.print_data(0)
+# p.parent.print_data(0)
 
-q = kbuild(sys.argv[2],arch)
-#q.current_parent.print_data(0)
+q = kbuild(sys.argv[2], arch)
+# q.current_parent.print_data(0)
 
 symbols = []
 
-syscalls = open(sys.argv[3],"r",encoding='latin1')
+syscalls = open(sys.argv[3], "r", encoding='latin1')
 for line in syscalls:
     elements = line.split(" ")
     if (len(elements) != 3):
         continue
     call = elements[2].strip()
-    if (call.startswith("__ksymtab_") == False):
+    if not call.startswith("__ksymtab_"):
         continue
     symbol = call[10:]
     if (symbols.count(symbol) == 0):
@@ -601,17 +587,17 @@ definitions = []
 for symbol in symbols:
     definition = q.current_parent.find_symbol(symbol)
     if (len(definition) != 0):
-        if (len(definition)==1) and (definition[0] == None):
+        if (len(definition) == 1) and (definition[0] is None):
             continue
         for d in definition:
-            if (definitions.count(d)==0):
+            if (definitions.count(d) == 0):
                 definitions.append(d)
 
 for l in definitions:
-    l = l.replace("defined","").strip()
+    l = l.replace("defined", "").strip()
     retval = p.parent.find_definition(l)
-    if (retval == None):
-        print("definition not found: "+l)
+    if (retval is None):
+        print("definition not found: " + l)
 
 print()
 p.parent.print_tree(0)
